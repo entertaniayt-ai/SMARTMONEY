@@ -55,6 +55,18 @@
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
         }
+
+        /* Video Container Styles */
+        .video-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: #000;
+        }
+        
+        iframe {
+            pointer-events: none; /* Prevents accidental clicks on the iframe while in-line */
+        }
     </style>
 </head>
 <body class="text-white">
@@ -112,12 +124,12 @@
                     </div>
                 </div>
                 <div class="md:w-1/2">
-                    <div onclick="openModal('sample1')" class="apple-card group cursor-pointer aspect-[9/16] max-w-[320px] mx-auto bg-slate-900 rounded-[2.5rem] overflow-hidden border border-white/10 relative">
-                        <div class="absolute inset-0 bg-gradient-to-t from-blue-900/60 to-transparent"></div>
-                        <div class="absolute inset-0 flex items-center justify-center">
-                            <div class="w-16 h-16 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-                                <i data-lucide="play" class="fill-white text-white w-6 h-6"></i>
-                            </div>
+                    <div onclick="expandVideo('sample1')" class="apple-card group cursor-pointer aspect-[9/16] max-w-[320px] mx-auto bg-slate-900 rounded-[2.5rem] overflow-hidden border border-white/10 relative">
+                        <div class="video-container" id="player-container-sample1">
+                            <div id="player-sample1"></div>
+                        </div>
+                        <div class="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 bg-black/40 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 text-[10px] font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
+                            Click to Expand
                         </div>
                     </div>
                 </div>
@@ -144,12 +156,12 @@
                     </div>
                 </div>
                 <div class="md:w-1/2">
-                    <div onclick="openModal('sample2')" class="apple-card group cursor-pointer aspect-[9/16] max-w-[320px] mx-auto bg-slate-900 rounded-[2.5rem] overflow-hidden border border-white/10 relative">
-                         <div class="absolute inset-0 bg-gradient-to-t from-emerald-900/60 to-transparent"></div>
-                         <div class="absolute inset-0 flex items-center justify-center">
-                            <div class="w-16 h-16 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-                                <i data-lucide="play" class="fill-white text-white w-6 h-6"></i>
-                            </div>
+                    <div onclick="expandVideo('sample2')" class="apple-card group cursor-pointer aspect-[9/16] max-w-[320px] mx-auto bg-slate-900 rounded-[2.5rem] overflow-hidden border border-white/10 relative">
+                        <div class="video-container" id="player-container-sample2">
+                            <div id="player-sample2"></div>
+                        </div>
+                        <div class="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 bg-black/40 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 text-[10px] font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
+                            Click to Expand
                         </div>
                     </div>
                 </div>
@@ -213,39 +225,109 @@
         </section>
     </main>
 
-    <!-- VIDEO MODAL -->
+    <!-- VIDEO MODAL (For Fullscreen View) -->
     <div id="video-modal" class="fixed inset-0 z-[200] bg-black/95 hidden items-center justify-center p-4">
         <button onclick="closeModal()" class="absolute top-8 right-8 text-white/50 hover:text-white"><i data-lucide="x-circle" class="w-10 h-10"></i></button>
         <div class="w-full max-w-sm aspect-[9/16] bg-black rounded-[2.5rem] overflow-hidden border border-white/10 shadow-2xl">
-            <iframe id="modal-iframe" class="w-full h-full" src="" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe>
+            <div id="modal-player" class="w-full h-full"></div>
         </div>
     </div>
 
+    <!-- YouTube IFrame API -->
+    <script src="https://www.youtube.com/iframe_api"></script>
+
     <script>
-        const videoSources = {
-            sample1: "https://www.youtube.com/embed/1IUXmDm_W60", 
-            sample2: "https://www.youtube.com/embed/UBy4PWm4mb4"
+        const videoData = {
+            sample1: { id: "1IUXmDm_W60", player: null },
+            sample2: { id: "UBy4PWm4mb4", player: null }
         };
+        
+        let modalPlayer = null;
+        let currentModalKey = null;
 
-        lucide.createIcons();
+        // Initialize players when API is ready
+        function onYouTubeIframeAPIReady() {
+            Object.keys(videoData).forEach(key => {
+                videoData[key].player = new YT.Player(`player-${key}`, {
+                    height: '100%',
+                    width: '100%',
+                    videoId: videoData[key].id,
+                    playerVars: {
+                        'autoplay': 0,
+                        'controls': 0,
+                        'loop': 1,
+                        'playlist': videoData[key].id,
+                        'mute': 1,
+                        'playsinline': 1,
+                        'rel': 0,
+                        'modestbranding': 1
+                    },
+                    events: {
+                        'onReady': onPlayerReady
+                    }
+                });
+            });
+        }
 
-        function openModal(sampleKey) {
+        function onPlayerReady(event) {
+            // Setup Intersection Observer for the players
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    const playerId = entry.target.id;
+                    const key = playerId.replace('player-container-', '');
+                    const player = videoData[key].player;
+
+                    if (entry.isIntersecting) {
+                        player.playVideo();
+                    } else {
+                        // Per your request "keep it playing" implies we don't necessarily stop it 
+                        // but to save resources we could pause. If you want it running 24/7, remove player.pauseVideo()
+                        // player.pauseVideo();
+                    }
+                });
+            }, { threshold: 0.1 });
+
+            document.querySelectorAll('.video-container').forEach(container => {
+                observer.observe(container);
+            });
+        }
+
+        // Expanded view (Modal)
+        function expandVideo(key) {
+            currentModalKey = key;
             const modal = document.getElementById('video-modal');
-            const iframe = document.getElementById('modal-iframe');
-            iframe.src = videoSources[sampleKey];
             modal.classList.remove('hidden');
             modal.classList.add('flex');
             document.body.style.overflow = 'hidden';
+
+            // Create or update modal player
+            if (modalPlayer) {
+                modalPlayer.loadVideoById(videoData[key].id);
+                modalPlayer.unMute();
+                modalPlayer.playVideo();
+            } else {
+                modalPlayer = new YT.Player('modal-player', {
+                    height: '100%',
+                    width: '100%',
+                    videoId: videoData[key].id,
+                    playerVars: {
+                        'autoplay': 1,
+                        'controls': 1,
+                        'rel': 0
+                    }
+                });
+            }
         }
 
         function closeModal() {
             const modal = document.getElementById('video-modal');
-            const iframe = document.getElementById('modal-iframe');
             modal.classList.add('hidden');
             modal.classList.remove('flex');
-            iframe.src = "";
+            if (modalPlayer) modalPlayer.stopVideo();
             document.body.style.overflow = 'auto';
         }
+
+        lucide.createIcons();
     </script>
 </body>
 </html>
